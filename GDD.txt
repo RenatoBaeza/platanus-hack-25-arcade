@@ -7,7 +7,7 @@ Players use quick reflexes and item attacks to survive hazards and outlast or ou
 You don’t race by moving forward — the world scrolls. The goal: stay alive and stay ahead.
 
 2. Core Gameplay Loop
-- Players spawn on screen with 3 lives each which is shown in the UI.
+- Players spawn on screen with N lives each which is shown in the UI.
 - The world begins scrolling right — terrain, walls, and obstacles come toward them.
 - Players must evade obstacles and collect item boxes.
 - Item boxes give weapons or life bonuses.
@@ -23,7 +23,7 @@ Player 1 uses WASD and E for activating an item
 Player 2 uses the arrow keys and Enter for activating an item
 
 5. Player Mechanics
-- Lives: 3 starting lives.
+- Lives: N starting lives.
 - Can gain extra lives through item boxes that randomly spawn as the terrain moves in front of players. Hitting your car to a life box immediately applies one life.
 - Can obtain weapons by hitting a weapon box, which can be used with the action button. Only one weapon can be stored at a time.
 - Position: The player’s character stays roughly centered horizontally; only slight forward/backward offset allowed for head-to-head pushing.

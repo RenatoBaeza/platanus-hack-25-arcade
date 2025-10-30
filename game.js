@@ -19,6 +19,8 @@ let keys = {};
 let elapsed = 0;
 let running = true;
 let menu = null;
+let fx = [];
+let sceneRef = null;
 
 // Tunable parameters (editable in pause menu)
 let MATCH_TIME = 60;
@@ -35,6 +37,7 @@ function preload() {}
 
 function create() {
   g = this.add.graphics();
+  sceneRef = this;
   setupInput(this);
   initMatch(this);
 }
@@ -51,10 +54,15 @@ function initMatch(scene) {
   obstacles = [];
 
   timeText = scene.add.text(400, 20, '60', styleText('#ffffff', 26)).setOrigin(0.5, 0);
+  timeText.setShadow(2, 2, '#000000', 2, true, true);
   p1LivesText = scene.add.text(16, 16, '', styleText('#3cff64', 18));
   p2LivesText = scene.add.text(800 - 16, 16, '', styleText('#4ecbff', 18)).setOrigin(1, 0);
   p1ItemText = scene.add.text(16, 42, '', styleText('#aaaaaa', 14));
   p2ItemText = scene.add.text(800 - 16, 42, '', styleText('#aaaaaa', 14)).setOrigin(1, 0);
+  p1LivesText.setShadow(1, 1, '#000000', 2, true, true);
+  p2LivesText.setShadow(1, 1, '#000000', 2, true, true);
+  p1ItemText.setShadow(1, 1, '#000000', 2, true, true);
+  p2ItemText.setShadow(1, 1, '#000000', 2, true, true);
   endText = null;
 }
 
@@ -89,6 +97,8 @@ function update(_t, dt) {
   missiles.forEach(m => { m.x += m.dx * m.sp * dts; m.y += m.dy * m.sp * dts; });
   obstacles.forEach(o => { o.x -= sp * dts; });
   items.forEach(i => { i.x -= sp * dts; });
+  // fx particles
+  fx.forEach(p => { p.vx *= 0.99; p.vy += 0.0002 * dts; p.x += p.vx * dts; p.y += p.vy * dts; p.life -= dts; });
 
   handleCollisions();
   cleanupOffscreen();
@@ -166,7 +176,7 @@ function handleCollisions() {
   // players with items
   players.forEach(p => {
     items.forEach(it => {
-      if (rectsOverlap(p, it)) { if (!p.item) p.item = it.reward; it.dead = true; tone(800, 0.05); }
+      if (rectsOverlap(p, it)) { if (!p.item) p.item = it.reward; it.dead = true; tone(800, 0.05); burst(it.x, it.y, 0xffe066, 10); }
     });
   });
 
@@ -185,13 +195,14 @@ function handleCollisions() {
     // hit obstacles
     obstacles.forEach(o => {
       if (!o.dead && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, o)) {
-        o.hp -= 1; if (o.hp <= 0 && o.type === 'wall') o.dead = true; m.dead = true; tone(180, 0.06);
+        o.hp -= 1; if (o.hp <= 0 && o.type === 'wall') { o.dead = true; burst(o.x, o.y, 0xff6b6b, 10); }
+        m.dead = true; tone(180, 0.06); burst(m.x, m.y, 0xffff66, 8);
       }
     });
     // hit players (enemy only)
     players.forEach(p => {
       if (p.id !== m.owner && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, p)) {
-        damage(p, 1); m.dead = true; tone(200, 0.06);
+        damage(p, 1); m.dead = true; tone(200, 0.06); burst(p.x, p.y, 0xff4444, 12);
       }
     });
   });
@@ -200,6 +211,8 @@ function handleCollisions() {
 function damage(p, amt) {
   if (p.inv > 0) return;
   p.lives -= amt; p.inv = 600;
+  burst(p.x, p.y, 0xff2d55, 14);
+  if (sceneRef) sceneRef.cameras.main.shake(100, 0.0025);
 }
 
 function bounceFrom(p, o) {
@@ -212,6 +225,7 @@ function cleanupOffscreen() {
   missiles = missiles.filter(m => !m.dead && m.x > -20 && m.x < 820 && m.y > -20 && m.y < 620);
   obstacles = offL(obstacles);
   items = offL(items);
+  fx = fx.filter(p => p.life > 0 && p.x > -40 && p.x < 840 && p.y > -40 && p.y < 640);
 }
 
 function rectsOverlap(a, b) {
@@ -221,42 +235,95 @@ function rectsOverlap(a, b) {
 function render() {
   g.clear();
   drawBackground();
+  drawScanlinesAndVignette();
   // items
-  items.forEach(it => { g.fillStyle(0xffe066, 1); rectCentered(it.x, it.y, it.w, it.h); g.lineStyle(2, 0x8a6d1f, 1); g.strokeRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h); });
+  items.forEach(it => { g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xffe066, 0.25); g.fillRoundedRect(it.x - it.w / 2 - 3, it.y - it.h / 2 - 3, it.w + 6, it.h + 6, 4); g.setBlendMode(Phaser.BlendModes.NORMAL); g.fillStyle(0xffe066, 1); g.fillRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4); g.lineStyle(2, 0x8a6d1f, 1); g.strokeRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4); });
   // obstacles
   obstacles.forEach(o => {
     if (o.type === 'wall') { g.fillStyle(0xff6b6b, 1); }
     if (o.type === 'rock') { g.fillStyle(0x666e7a, 1); }
     if (o.type === 'spike') { g.fillStyle(0xbfbfbf, 1); }
     rectCentered(o.x, o.y, o.w, o.h);
+    g.lineStyle(2, 0x000000, 0.25); g.strokeRoundedRect(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h, 4);
   });
   // missiles
-  missiles.forEach(m => { g.fillStyle(0xffff66, 1); g.fillCircle(m.x, m.y, m.r); });
+  missiles.forEach(m => { g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xffff66, 0.15); g.fillCircle(m.x, m.y, m.r * 2.4); g.fillStyle(0xffcc00, 0.25); g.fillCircle(m.x, m.y, m.r * 1.6); g.setBlendMode(Phaser.BlendModes.NORMAL); g.fillStyle(0xffff99, 1); g.fillCircle(m.x, m.y, m.r); });
+  // particles/fx
+  g.setBlendMode(Phaser.BlendModes.ADD);
+  fx.forEach(p => { g.fillStyle(p.c, Math.max(0, p.life / p.max)); g.fillCircle(p.x, p.y, p.r); });
+  g.setBlendMode(Phaser.BlendModes.NORMAL);
   // players
   players.forEach(p => {
     const alpha = p.inv > 0 ? 0.4 + 0.6 * Math.sin(p.inv / 40) : 1;
+    g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(p.color, 0.2 * alpha); g.fillRoundedRect(p.x - p.w / 2 - 4, p.y - p.h / 2 - 4, p.w + 8, p.h + 8, 6); g.setBlendMode(Phaser.BlendModes.NORMAL);
     g.fillStyle(p.color, alpha);
-    rectCentered(p.x, p.y, p.w, p.h);
+    g.fillRoundedRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 6);
+    g.lineStyle(2, 0x000000, 0.3); g.strokeRoundedRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 6);
   });
 }
 
 function drawBackground() {
-  g.fillStyle(0x0b0f1a, 1); g.fillRect(0, 0, 800, 600);
+  // vertical gradient background (banded for performance)
+  for (let i = 0; i < 12; i++) {
+    const t = i / 11;
+    const c = lerpColor(0x0b0f1a, 0x13203a, t);
+    g.fillStyle(c, 1);
+    g.fillRect(0, i * 50, 800, 50);
+  }
+  // ground strip
   g.fillStyle(0x0f1323, 1); g.fillRect(0, 560, 800, 40);
-  // parallax bands
-  const t = elapsed * 40;
-  g.lineStyle(2, 0x162042, 1);
+  // parallax stars
+  const tt = elapsed;
+  drawStars(40, 0.08, 0x1f3b73, tt * 18);
+  drawStars(24, 0.14, 0x2f5fb5, tt * 32);
+  // moving bands (futuristic)
+  const t2 = elapsed * 40;
+  g.lineStyle(2, 0x162042, 0.9);
   for (let i = 0; i < 6; i++) {
     const y = 120 + i * 70;
-    const x = (800 - ((t * (0.4 + i * 0.1)) % 200));
-    for (let k = 0; k < 6; k++) {
-      g.strokeRect(x - k * 200, y, 120, 8);
-    }
+    const x = (800 - ((t2 * (0.4 + i * 0.1)) % 200));
+    for (let k = 0; k < 6; k++) g.strokeRect(x - k * 200, y, 120, 8);
   }
 }
 
 function rectCentered(x, y, w, h) {
-  g.fillRect(x - w / 2, y - h / 2, w, h);
+  g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 4);
+}
+
+function drawScanlinesAndVignette() {
+  // subtle scanlines
+  g.lineStyle(1, 0x000000, 0.04);
+  for (let y = 0; y < 600; y += 3) g.strokeLineShape(new Phaser.Geom.Line(0, y, 800, y));
+  // vignette using edge rectangles
+  g.fillStyle(0x000000, 0.08);
+  g.fillRect(0, 0, 800, 24); g.fillRect(0, 576, 800, 24);
+  g.fillRect(0, 0, 24, 600); g.fillRect(776, 0, 24, 600);
+}
+
+function drawStars(count, speed, color, phase) {
+  g.fillStyle(color, 0.9);
+  for (let i = 0; i < count; i++) {
+    const y = 40 + ((i * 523) % 480);
+    const x = (800 - ((phase * speed + i * 73) % 800));
+    g.fillRect(x, y, 2, 2);
+  }
+}
+
+function lerpColor(a, b, t) {
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  const rr = (ar + (br - ar) * t) & 255;
+  const rg = (ag + (bg - ag) * t) & 255;
+  const rb = (ab + (bb - ab) * t) & 255;
+  return (rr << 16) | (rg << 8) | rb;
+}
+
+function burst(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 0.08 + Math.random() * 0.25;
+    fx.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 2 + Math.random() * 3, c: color, life: 350 + Math.random() * 250, max: 600 });
+  }
 }
 
 function updateUI() {
