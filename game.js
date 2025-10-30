@@ -1,5 +1,3 @@
-// TurboTurbo — 2P side-scrolling battle-racing (Phaser 3)
-
 const config = {
   type: Phaser.AUTO,
   width: 800,
@@ -19,28 +17,26 @@ let keys = {};
 let elapsed = 0;
 let running = true;
 let menu = null;
+let startMenu = null;
 let fx = [];
 let sceneRef = null;
-// music state
 let music = { on: false, timer: null, step: 0, gain: null, o1: null, o2: null };
 
-// Tunable parameters (editable in pause menu)
 let MATCH_TIME = 60;
 let LIFE_START = 999;
 let RATE_OBS = 0.02;
 let RATE_SPIKE = 0.008;
 let RATE_ITEM = 0.004;
-let RATE_EMISS = 0.006; // enemy missiles from right
-let RATE_TMISS = 0.004; // enemy missiles from top
+let RATE_EMISS = 0.006;
+let RATE_TMISS = 0.004;
 let SPD_SLOW = 0.12;
 let SPD_MED = 0.18;
 let SPD_FAST = 0.26;
 let MOVE_SPEED = 0.02;
-let WALL_HIT_DAMAGE = 1;      // base damage when a player hits a wall
-let SHOT_DAMAGE_MULT = 2;     // missiles do N× wall-hit damage to players
-// Missile speeds (configurable)
-let FRONT_MISSILE_SPEED = 0.42;   // from right side ("front")
-let TOPDOWN_MISSILE_SPEED = 0.22; // from top
+let WALL_HIT_DAMAGE = 1;
+let SHOT_DAMAGE_MULT = 10;
+let FRONT_MISSILE_SPEED = 0.42;
+let TOPDOWN_MISSILE_SPEED = 0.22;
 
 function preload() {}
 
@@ -48,8 +44,8 @@ function create() {
   g = this.add.graphics();
   sceneRef = this;
   setupInput(this);
-  initMatch(this);
   initMusic(this);
+  openStartMenu(this);
 }
 
 function initMatch(scene) {
@@ -63,12 +59,12 @@ function initMatch(scene) {
   missiles = [];
   obstacles = [];
 
-  timeText = scene.add.text(400, 20, '60', styleText('#ffffff', 26)).setOrigin(0.5, 0);
+  timeText = scene.add.text(400, 20, '60', styleText('#ffffff', 26)).setOrigin(0.5, 0).setDepth(1000);
   timeText.setShadow(2, 2, '#000000', 2, true, true);
-  p1LivesText = scene.add.text(16, 16, '', styleText('#3cff64', 18));
-  p2LivesText = scene.add.text(800 - 16, 16, '', styleText('#4ecbff', 18)).setOrigin(1, 0);
-  p1ItemText = scene.add.text(16, 42, '', styleText('#aaaaaa', 14));
-  p2ItemText = scene.add.text(800 - 16, 42, '', styleText('#aaaaaa', 14)).setOrigin(1, 0);
+  p1LivesText = scene.add.text(16, 16, '', styleText('#3cff64', 18)).setDepth(1000);
+  p2LivesText = scene.add.text(800 - 16, 16, '', styleText('#4ecbff', 18)).setOrigin(1, 0).setDepth(1000);
+  p1ItemText = scene.add.text(16, 42, '', styleText('#aaaaaa', 14)).setDepth(1000);
+  p2ItemText = scene.add.text(800 - 16, 42, '', styleText('#aaaaaa', 14)).setOrigin(1, 0).setDepth(1000);
   p1LivesText.setShadow(1, 1, '#000000', 2, true, true);
   p2LivesText.setShadow(1, 1, '#000000', 2, true, true);
   p1ItemText.setShadow(1, 1, '#000000', 2, true, true);
@@ -81,7 +77,6 @@ function styleText(color, size) {
 }
 
 function pickupName(kind) {
-  if (kind === 'life') return 'Life';
   if (kind === 'front') return 'Front';
   if (kind === 'back') return 'Back';
   if (kind === 'sides') return 'Sides';
@@ -102,17 +97,18 @@ function makePlayer(id, x, y, color) {
 function setupInput(scene) {
   keys = scene.input.keyboard.addKeys({
     w: 'W', a: 'A', s: 'S', d: 'D', e: 'E',
-    up: 'UP', left: 'LEFT', down: 'DOWN', right: 'RIGHT', enter: 'ENTER', t: 'T', m: 'M'
+    up: 'UP', left: 'LEFT', down: 'DOWN', right: 'RIGHT', enter: 'ENTER', t: 'T', m: 'M', r: 'R',
+    space: 'SPACE', back: 'BACKSPACE', esc: 'ESC'
   });
 }
 
 function update(_t, dt) {
-  // Toggle menu
+  if (startMenu) { drawStartMenu(); return; }
   if (Phaser.Input.Keyboard.JustDown(keys.t)) {
     if (!menu) openMenu(this); else closeMenu(this);
   }
-  // Music mute toggle
   if (Phaser.Input.Keyboard.JustDown(keys.m)) toggleMusic(this);
+  if (Phaser.Input.Keyboard.JustDown(keys.r)) { this.scene.restart(); return; }
   if (!running || menu) { if (menu) drawMenu(); return; }
   const dts = Math.min(50, dt);
   elapsed += dts / 1000;
@@ -151,6 +147,7 @@ function scrollSpeed(t) {
 function spawnLogic(t) {
   if ((Math.random() < RATE_OBS)) spawnObstacle();
   if (Math.random() < RATE_SPIKE) spawnSpike();
+  if (Math.random() < RATE_SPIKE) spawnTopSpike();
   if (Math.random() < RATE_ITEM) spawnItemBox();
   if (Math.random() < RATE_EMISS) spawnEnemyMissile();
   if (Math.random() < RATE_TMISS) spawnTopMissile();
@@ -177,6 +174,11 @@ function spawnSpike() {
   obstacles.push({ type: 'spike', x: 840, y, w: 20, h: 60, hp: 999 });
 }
 
+function spawnTopSpike() {
+  const y = 80;
+  obstacles.push({ type: 'spike', x: 840, y, w: 20, h: 60, hp: 999 });
+}
+
 function canPlaceItemAt(x, y) {
   const M = 48; // minimum clearance around items
   const test = { x, y, w: 34 + M * 2, h: 34 + M * 2 };
@@ -192,11 +194,10 @@ function spawnItemBox() {
   for (let i = 0; i < 8 && !canPlaceItemAt(x, y); i++) y = 120 + Math.random() * 360;
   if (!canPlaceItemAt(x, y)) return;
   const kind = Math.random();
-  let reward = 'life';
-  if (kind < 0.2) reward = 'life';
-  else if (kind < 0.4) reward = 'front';
-  else if (kind < 0.6) reward = 'back';
-  else if (kind < 0.8) reward = 'sides';
+  let reward = 'front';
+  if (kind < 0.25) reward = 'front';
+  else if (kind < 0.5) reward = 'back';
+  else if (kind < 0.75) reward = 'sides';
   else reward = 'vert';
   items.push({ x, y, w: 34, h: 34, reward });
 }
@@ -219,7 +220,6 @@ function tickPlayer(p, dt, sp) {
 
 function useItem(p) {
   if (!p.item || p.fireCd > 0) return;
-  if (p.item === 'life') { p.lives = Math.min(9, p.lives + 1); p.item = null; tone(660, 0.08); return; }
   const shots = [];
   const ang = 0.25; // radians
   const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -340,8 +340,7 @@ function rectsOverlap(a, b) {
 function render() {
   g.clear();
   drawBackground();
-  drawScanlinesAndVignette();
-  drawHUD();
+  // gameplay layers first
   // items
   items.forEach(it => drawItemBox(it));
   // obstacles
@@ -367,6 +366,10 @@ function render() {
     g.fillRoundedRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 6);
     g.lineStyle(2, 0x000000, 0.3); g.strokeRoundedRect(p.x - p.w / 2, p.y - p.h / 2, p.w, p.h, 6);
   });
+  // HUD above gameplay
+  drawHUD();
+  // post-processing on top
+  drawScanlinesAndVignette();
 }
 
 function drawBackground() {
@@ -480,13 +483,12 @@ function rectCentered(x, y, w, h) {
 }
 
 function drawItemBox(it) {
-  // color by reward type + letter inside: F (front), B (back), S (sides), L (life)
-  let base = 0xffe066, edge = 0x8a6d1f, letter = 'L', lc = 0x0b0f1a;
-  if (it.reward === 'front') { base = 0xffc107; edge = 0x8b6b00; letter = 'F'; }
-  else if (it.reward === 'back') { base = 0x4ecbff; edge = 0x1a6b87; letter = 'B'; }
-  else if (it.reward === 'sides') { base = 0xc77dff; edge = 0x5b2a8a; letter = 'S'; }
-  else if (it.reward === 'life') { base = 0x3cff64; edge = 0x166b28; letter = 'L'; }
-  else if (it.reward === 'vert') { base = 0xff7ab2; edge = 0x8a2a57; letter = 'V'; }
+  // color by reward type + icon inside representing shooting direction
+  let base = 0xffe066, edge = 0x8a6d1f;
+  if (it.reward === 'front') { base = 0xffc107; edge = 0x8b6b00; }
+  else if (it.reward === 'back') { base = 0x4ecbff; edge = 0x1a6b87; }
+  else if (it.reward === 'sides') { base = 0xc77dff; edge = 0x5b2a8a; }
+  else if (it.reward === 'vert') { base = 0xff7ab2; edge = 0x8a2a57; }
   // glow
   g.setBlendMode(Phaser.BlendModes.ADD);
   g.fillStyle(base, 0.25);
@@ -497,8 +499,53 @@ function drawItemBox(it) {
   g.fillRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4);
   g.lineStyle(2, edge, 1);
   g.strokeRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4);
-  // letter (stroke)
-  drawLetter(letter, it.x, it.y, it.w - 8, lc, edge);
+  // icon
+  drawItemIcon(it.reward, it.x, it.y, it.w - 10, 0x0b0f1a, edge);
+}
+
+function drawItemIcon(kind, cx, cy, size, color, shadow) {
+  const s = size;
+  const half = s / 2;
+  const tri = (x1, y1, x2, y2, x3, y3) => {
+    // shadow
+    g.lineStyle(2, shadow, 1);
+    g.strokeTriangle(x1 + 1, y1 + 1, x2 + 1, y2 + 1, x3 + 1, y3 + 1);
+    // fill and outline
+    g.fillStyle(color, 1);
+    g.fillTriangle(x1, y1, x2, y2, x3, y3);
+    g.lineStyle(2, color, 1);
+    g.strokeTriangle(x1, y1, x2, y2, x3, y3);
+  };
+  if (kind === 'front') {
+    // right arrow
+    const x0 = cx - half * 0.4;
+    tri(x0, cy - half * 0.35, cx + half, cy, x0, cy + half * 0.35);
+  } else if (kind === 'back') {
+    // left arrow
+    const x0 = cx + half * 0.4;
+    tri(x0, cy - half * 0.35, cx - half, cy, x0, cy + half * 0.35);
+  } else if (kind === 'vert') {
+    // up and down arrows
+    tri(cx - half * 0.25, cy - half, cx + half * 0.25, cy - half, cx, cy - half * 0.25);
+    tri(cx - half * 0.25, cy + half, cx + half * 0.25, cy + half, cx, cy + half * 0.25);
+  } else if (kind === 'sides') {
+    // four diagonal arrows
+    const r = half * 0.75;
+    const makeDiag = (ang) => {
+      const tipX = cx + Math.cos(ang) * r;
+      const tipY = cy + Math.sin(ang) * r;
+      const left = ang + Math.PI * 0.75;
+      const right = ang - Math.PI * 0.75;
+      const b = half * 0.35;
+      tri(tipX, tipY,
+          cx + Math.cos(left) * b, cy + Math.sin(left) * b,
+          cx + Math.cos(right) * b, cy + Math.sin(right) * b);
+    };
+    makeDiag(Math.PI / 4);
+    makeDiag(-Math.PI / 4);
+    makeDiag((3 * Math.PI) / 4);
+    makeDiag((-3 * Math.PI) / 4);
+  }
 }
 
 function drawLetter(ch, cx, cy, size, color, shadow) {
@@ -608,10 +655,10 @@ function checkWinCondition(scene) {
 function endMatch(scene, msg) {
   running = false;
   tone(240, 0.25);
-  const ov = scene.add.graphics();
+  const ov = scene.add.graphics().setDepth(1500);
   ov.fillStyle(0x000000, 0.6); ov.fillRect(0, 0, 800, 600);
-  endText = scene.add.text(400, 260, msg, { fontSize: '44px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5);
-  const sub = scene.add.text(400, 330, 'Press R to Rematch', styleText('#ffff66', 22)).setOrigin(0.5);
+  endText = scene.add.text(400, 260, msg, { fontSize: '44px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5).setDepth(1501);
+  const sub = scene.add.text(400, 330, 'Press R to Rematch', styleText('#ffff66', 22)).setOrigin(0.5).setDepth(1501);
   scene.input.keyboard.once('keydown-R', () => { scene.scene.restart(); });
 }
 
@@ -750,13 +797,120 @@ function hit(kind, t, len, vol) {
   }
 }
 
+// Start/Main menu
+function openStartMenu(scene) {
+  startMenu = {
+    overlay: scene.add.graphics().setDepth(1400),
+    bg: scene.add.graphics().setDepth(1400),
+    sel: scene.add.graphics().setDepth(1401),
+    title: scene.add.text(400, 160, 'TurboTurbo', { fontSize: '52px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#00d4ff', strokeThickness: 6 }).setOrigin(0.5).setDepth(1401),
+    subtitle: scene.add.text(400, 210, '2P Battle-Race', styleText('#cfe0ff', 20)).setOrigin(0.5).setDepth(1401),
+    options: ['Start', 'Instructions', 'Credits'],
+    idx: 0,
+    mode: 'main',
+    rows: [],
+    info: null,
+    tip: scene.add.text(400, 520, 'Up/Down to select • Enter to confirm', styleText('#ffff66', 18)).setOrigin(0.5).setDepth(1401)
+  };
+  running = false;
+  // dim background
+  startMenu.overlay.fillStyle(0x000000, 0.55); startMenu.overlay.fillRect(0, 0, 800, 600);
+  // panel
+  const pw = 560, ph = 360; const px = 120, py = 120;
+  startMenu.bg.fillStyle(0x0b0f1a, 0.95); startMenu.bg.fillRoundedRect(px, py, pw, ph, 18);
+  startMenu.bg.lineStyle(2, 0x1f3b73, 0.9); startMenu.bg.strokeRoundedRect(px, py, pw, ph, 18);
+  // option rows
+  for (let i = 0; i < startMenu.options.length; i++) {
+    const y = 270 + i * 44;
+    const t = scene.add.text(400, y, startMenu.options[i], styleText('#cfe0ff', 24)).setOrigin(0.5).setDepth(1401);
+    startMenu.rows.push(t);
+  }
+  drawStartMenu();
+}
+
+function drawStartMenu() {
+  if (!startMenu) return;
+  startMenu.sel.clear();
+  // highlight only in main mode
+  if (startMenu.mode === 'main') {
+    for (let i = 0; i < startMenu.rows.length; i++) startMenu.rows[i].setVisible(true);
+    if (startMenu.info) startMenu.info.setVisible(false);
+    const y = 270 + startMenu.idx * 44 - 18;
+    startMenu.sel.fillStyle(0x00d4ff, 0.16); startMenu.sel.fillRoundedRect(220, y, 360, 36, 10);
+    startMenu.sel.lineStyle(1, 0x00d4ff, 0.6); startMenu.sel.strokeRoundedRect(220, y, 360, 36, 10);
+    for (let i = 0; i < startMenu.rows.length; i++) {
+      startMenu.rows[i].setColor(i === startMenu.idx ? '#00e5ff' : '#cfe0ff');
+    }
+    startMenu.tip.setText('Up/Down to select • Enter to confirm');
+  } else {
+    // subview: instructions or credits
+    for (let i = 0; i < startMenu.rows.length; i++) startMenu.rows[i].setVisible(false);
+    if (!startMenu.info) {
+      startMenu.info = sceneRef.add.text(400, 340, '', { fontSize: '18px', fontFamily: 'Arial, sans-serif', color: '#e6f1ff', align: 'center', wordWrap: { width: 520 } }).setOrigin(0.5).setDepth(1401);
+    }
+    startMenu.info.setVisible(true);
+    if (startMenu.mode === 'instructions') {
+      startMenu.info.setText(
+        'How to Play:\n\n' +
+        '• P1: Move with W/A/S/D, use item with E\n' +
+        '• P2: Move with Arrow Keys, use item with Enter\n' +
+        '• Avoid walls and spikes, survive longer than your opponent\n' +
+        '• Grab item boxes for multi-directional shots\n' +
+        '• Press T in-game for Config. Press M to toggle music.'
+      );
+    } else if (startMenu.mode === 'credits') {
+      startMenu.info.setText('Made by Renato Baeza for the Platanus Hackathon 2025');
+    }
+    startMenu.tip.setText('Backspace/Esc to go back');
+  }
+  handleStartMenuInput();
+}
+
+function handleStartMenuInput() {
+  if (!startMenu) return;
+  if (startMenu.mode === 'main') {
+    if (Phaser.Input.Keyboard.JustDown(keys.up)) startMenu.idx = (startMenu.idx + startMenu.options.length - 1) % startMenu.options.length;
+    if (Phaser.Input.Keyboard.JustDown(keys.down)) startMenu.idx = (startMenu.idx + 1) % startMenu.options.length;
+    if (Phaser.Input.Keyboard.JustDown(keys.enter) || Phaser.Input.Keyboard.JustDown(keys.space)) {
+      const sel = startMenu.options[startMenu.idx];
+      if (sel === 'Start') { closeStartMenu(); initMatch(sceneRef); return; }
+      if (sel === 'Instructions') { startMenu.mode = 'instructions'; }
+      if (sel === 'Credits') { startMenu.mode = 'credits'; }
+    }
+  } else {
+    if (Phaser.Input.Keyboard.JustDown(keys.back) || Phaser.Input.Keyboard.JustDown(keys.esc)) {
+      startMenu.mode = 'main';
+    }
+  }
+}
+
+function closeStartMenu() {
+  if (!startMenu) return;
+  startMenu.overlay.destroy();
+  startMenu.bg.destroy();
+  startMenu.sel.destroy();
+  startMenu.title.destroy();
+  startMenu.subtitle.destroy();
+  if (startMenu.info) startMenu.info.destroy();
+  startMenu.rows.forEach(r => r.destroy());
+  startMenu.tip.destroy();
+  startMenu = null;
+  running = true;
+}
+
 // Pause/config menu
 function openMenu(scene) {
   menu = {
-    overlay: scene.add.graphics(),
-    bg: scene.add.graphics(),
-    sel: scene.add.graphics(),
-    title: scene.add.text(400, 120, 'Config', { fontSize: '36px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#00d4ff', strokeThickness: 2 }).setOrigin(0.5),
+    overlay: scene.add.graphics().setDepth(1600),
+    bg: scene.add.graphics().setDepth(1600),
+    sel: scene.add.graphics().setDepth(1600),
+    container: scene.add.container(0, 0).setDepth(1600),
+    maskG: null,
+    mask: null,
+    view: { x: 180, y: 164, w: 440, h: 292 },
+    scroll: 0,
+    maxScroll: 0,
+    title: scene.add.text(400, 120, 'Config', { fontSize: '36px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#00d4ff', strokeThickness: 2 }).setOrigin(0.5).setDepth(1601),
     items: [
       { name: 'Match Time', get: () => MATCH_TIME, set: v => { MATCH_TIME = clampInt(v, 10, 300); } },
       { name: 'Start Lives', get: () => LIFE_START, set: v => { LIFE_START = clampInt(v, 1, 9); } },
@@ -775,29 +929,60 @@ function openMenu(scene) {
     ],
     idx: 0,
     rows: [],
-    tip: scene.add.text(400, 480, 'Up/Down select • Left/Right change • T to resume', styleText('#ffff66', 16)).setOrigin(0.5)
+    tip: scene.add.text(400, 480, 'Up/Down select • Left/Right change • T to resume', styleText('#ffff66', 16)).setOrigin(0.5).setDepth(1601)
   };
   menu.overlay.fillStyle(0x000000, 0.55); menu.overlay.fillRect(0, 0, 800, 600);
   // panel background
   const pw = 520, ph = 360; const px = 140, py = 120;
   menu.bg.fillStyle(0x0b0f1a, 0.9); menu.bg.fillRoundedRect(px, py, pw, ph, 16);
   menu.bg.lineStyle(2, 0x1f3b73, 0.8); menu.bg.strokeRoundedRect(px, py, pw, ph, 16);
+  // rows inside scrollable container
   for (let i = 0; i < menu.items.length; i++) {
     const y = 180 + i * 34;
     const txt = scene.add.text(400, y, '', styleText('#e6f1ff', 20)).setOrigin(0.5);
+    menu.container.add(txt);
     menu.rows.push(txt);
   }
+  // mask for scroll viewport
+  menu.maskG = scene.add.graphics().setDepth(1600);
+  menu.maskG.fillStyle(0xffffff, 1);
+  menu.maskG.fillRect(menu.view.x, menu.view.y, menu.view.w, menu.view.h);
+  menu.mask = menu.maskG.createGeometryMask();
+  menu.container.setMask(menu.mask);
+  // do not render the geometry used for the mask
+  menu.maskG.setVisible(false);
+  // mask the selection highlight too
+  menu.sel.setMask(menu.mask);
+  // compute max scroll
+  const lastY = 180 + (menu.items.length - 1) * 34 + 16;
+  const viewBottom = menu.view.y + menu.view.h;
+  menu.maxScroll = Math.max(0, lastY - viewBottom);
   running = false;
   drawMenu();
+  // wheel scroll
+  menu._onWheel = (pointer, gameObjects, dx, dy) => {
+    menu.scroll = clamp(menu.scroll + dy * 0.25, 0, menu.maxScroll);
+    menu.container.y = -menu.scroll;
+  };
+  scene.input.on('wheel', menu._onWheel);
 }
 
 function drawMenu() {
   // selection highlight bar
   if (menu && menu.sel) {
     menu.sel.clear();
-    const y = 180 + menu.idx * 34 - 16;
-    menu.sel.fillStyle(0x00d4ff, 0.16); menu.sel.fillRoundedRect(180, y, 440, 32, 8);
-    menu.sel.lineStyle(1, 0x00d4ff, 0.6); menu.sel.strokeRoundedRect(180, y, 440, 32, 8);
+    // ensure selected row stays within viewport (auto-scroll)
+    const rowY = 180 + menu.idx * 34;
+    const topVisible = menu.view.y + 18;
+    const botVisible = menu.view.y + menu.view.h - 18;
+    const desiredTop = rowY - 16;
+    const desiredBot = rowY + 16;
+    if (desiredTop < topVisible) menu.scroll = clamp(menu.scroll - (topVisible - desiredTop), 0, menu.maxScroll);
+    if (desiredBot > botVisible) menu.scroll = clamp(menu.scroll + (desiredBot - botVisible), 0, menu.maxScroll);
+    menu.container.y = -menu.scroll;
+    const y = rowY - 16 - menu.scroll;
+    menu.sel.fillStyle(0x00d4ff, 0.16); menu.sel.fillRoundedRect(menu.view.x, y, menu.view.w, 32, 8);
+    menu.sel.lineStyle(1, 0x00d4ff, 0.6); menu.sel.strokeRoundedRect(menu.view.x, y, menu.view.w, 32, 8);
   }
   for (let i = 0; i < menu.items.length; i++) {
     const it = menu.items[i];
@@ -816,6 +1001,9 @@ function handleMenuInput() {
   const step = (menu.idx <= 1) ? 1 : (menu.idx <= 4 ? 0.001 : (menu.idx <= 8 ? 0.01 : 0.1));
   if (Phaser.Input.Keyboard.JustDown(keys.left)) menu.items[menu.idx].set(menu.items[menu.idx].get() - step);
   if (Phaser.Input.Keyboard.JustDown(keys.right)) menu.items[menu.idx].set(menu.items[menu.idx].get() + step);
+  // Page scroll with WASD vertical (optional): W/S mirrors Up/Down hold
+  if (keys.w.isDown && !Phaser.Input.Keyboard.JustDown(keys.w)) { menu.scroll = clamp(menu.scroll - 6, 0, menu.maxScroll); menu.container.y = -menu.scroll; }
+  if (keys.s.isDown && !Phaser.Input.Keyboard.JustDown(keys.s)) { menu.scroll = clamp(menu.scroll + 6, 0, menu.maxScroll); menu.container.y = -menu.scroll; }
 }
 
 function closeMenu(scene) {
@@ -823,9 +1011,12 @@ function closeMenu(scene) {
   menu.overlay.destroy();
   if (menu.bg) menu.bg.destroy();
   if (menu.sel) menu.sel.destroy();
+  if (menu.container) menu.container.destroy(true);
+  if (menu.maskG) menu.maskG.destroy();
+  if (scene && menu._onWheel) scene.input.off('wheel', menu._onWheel);
   menu.title.destroy();
   menu.tip.destroy();
-  menu.rows.forEach(r => r.destroy());
+  menu.rows.forEach(r => { if (!r.destroyed) r.destroy(); });
   menu = null;
   if (!endText) running = true;
 }

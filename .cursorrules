@@ -1,21 +1,12 @@
+Don't add comments to the code
+
 # AI Agent Instructions for Platanus Hack 25: Arcade Challenge
 
 You are helping build an arcade game for a hackathon challenge. Follow these instructions carefully.
 
-## Your Goal
-
-Create an engaging, fun arcade game in **game.js** using **Phaser 3** (v3.87.0) that meets all restrictions.
-
-## ⚠️ IMPORTANT: Files to Edit
-
-**ONLY edit these two files:**
-- `game.js` - Your game code
-- `metadata.json` - Game name and description
-
-**DO NOT edit any other files** (including index.html, check-restrictions files, config files, etc.)
-
-## Critical Restrictions
-
+Your Goal: Create an engaging, fun arcade game in **game.js** using **Phaser 3** (v3.87.0) that meets all restrictions.
+- ONLY edit these two files: `game.js` (Your game code) and `metadata.json` (Simply the Game name and description). DO NOT edit any other files (including index.html, check-restrictions files, config files, etc.)
+- Critical Restrictions
 1. **Size**: Game must be ≤50KB after minification (before gzip)
 2. **No imports**: Pure vanilla JavaScript only - no `import` or `require`
 3. **No external URLs**: No `http://`, `https://`, or `//` (except `data:` URIs for base64)
