@@ -276,7 +276,7 @@ function checkWinCondition(scene) {
   if (!p1Alive && p2Alive) winner = 'Player 2 Wins!';
   else if (!p2Alive && p1Alive) winner = 'Player 1 Wins!';
   else if (!p1Alive && !p2Alive) winner = 'Draw!';
-  else if (timeUp) winner = players[0].x > players[1].x ? 'Player 1 Wins!' : (players[0].x < players[1].x ? 'Player 2 Wins!' : 'Draw!');
+  else if (timeUp) winner = players[0].lives > players[1].lives ? 'Player 1 Wins!' : (players[0].lives < players[1].lives ? 'Player 2 Wins!' : 'Draw!');
   if (winner) endMatch(scene, winner);
 }
 
