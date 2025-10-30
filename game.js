@@ -1,358 +1,362 @@
-// Platanus Hack 25: Snake Game
-// Navigate the snake around the "PLATANUS HACK ARCADE" title made of blocks!
+// TurboTurbo — 2P side-scrolling battle-racing (Phaser 3)
 
 const config = {
   type: Phaser.AUTO,
   width: 800,
   height: 600,
-  backgroundColor: '#000000',
-  scene: {
-    create: create,
-    update: update
-  }
+  backgroundColor: '#0b0f1a',
+  scene: { preload, create, update }
 };
 
 const game = new Phaser.Game(config);
 
-// Game variables
-let snake = [];
-let snakeSize = 15;
-let direction = { x: 1, y: 0 };
-let nextDirection = { x: 1, y: 0 };
-let food;
-let score = 0;
-let scoreText;
-let titleBlocks = [];
-let gameOver = false;
-let moveTimer = 0;
-let moveDelay = 150;
-let graphics;
+let g, timeText, p1LivesText, p2LivesText, p1ItemText, p2ItemText, endText;
+let players = [];
+let items = [];
+let missiles = [];
+let obstacles = [];
+let keys = {};
+let elapsed = 0;
+let running = true;
+let menu = null;
 
-// Pixel font patterns (5x5 grid for each letter)
-const letters = {
-  P: [[1,1,1,1],[1,0,0,1],[1,1,1,1],[1,0,0,0],[1,0,0,0]],
-  L: [[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,0,0,0],[1,1,1,1]],
-  A: [[0,1,1,0],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  T: [[1,1,1,1],[0,1,0,0],[0,1,0,0],[0,1,0,0],[0,1,0,0]],
-  N: [[1,0,0,1],[1,1,0,1],[1,0,1,1],[1,0,0,1],[1,0,0,1]],
-  U: [[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,1]],
-  S: [[0,1,1,1],[1,0,0,0],[0,1,1,0],[0,0,0,1],[1,1,1,0]],
-  H: [[1,0,0,1],[1,0,0,1],[1,1,1,1],[1,0,0,1],[1,0,0,1]],
-  C: [[0,1,1,1],[1,0,0,0],[1,0,0,0],[1,0,0,0],[0,1,1,1]],
-  K: [[1,0,0,1],[1,0,1,0],[1,1,0,0],[1,0,1,0],[1,0,0,1]],
-  '2': [[1,1,1,0],[0,0,0,1],[0,1,1,0],[1,0,0,0],[1,1,1,1]],
-  '5': [[1,1,1,1],[1,0,0,0],[1,1,1,0],[0,0,0,1],[1,1,1,0]],
-  ':': [[0,0,0,0],[0,1,0,0],[0,0,0,0],[0,1,0,0],[0,0,0,0]],
-  R: [[1,1,1,0],[1,0,0,1],[1,1,1,0],[1,0,1,0],[1,0,0,1]],
-  D: [[1,1,1,0],[1,0,0,1],[1,0,0,1],[1,0,0,1],[1,1,1,0]],
-  E: [[1,1,1,1],[1,0,0,0],[1,1,1,0],[1,0,0,0],[1,1,1,1]]
-};
+// Tunable parameters (editable in pause menu)
+let MATCH_TIME = 60;
+let LIFE_START = 999;
+let RATE_OBS = 0.02;
+let RATE_SPIKE = 0.008;
+let RATE_ITEM = 0.004;
+let SPD_SLOW = 0.12;
+let SPD_MED = 0.18;
+let SPD_FAST = 0.26;
+let MOVE_SPEED = 0.02;
 
-// Bold font for ARCADE (filled/solid style)
-const boldLetters = {
-  A: [[1,1,1,1,1],[1,1,0,1,1],[1,1,1,1,1],[1,1,0,1,1],[1,1,0,1,1]],
-  R: [[1,1,1,1,0],[1,1,0,1,1],[1,1,1,1,0],[1,1,0,1,1],[1,1,0,1,1]],
-  C: [[1,1,1,1,1],[1,1,0,0,0],[1,1,0,0,0],[1,1,0,0,0],[1,1,1,1,1]],
-  D: [[1,1,1,1,0],[1,1,0,1,1],[1,1,0,1,1],[1,1,0,1,1],[1,1,1,1,0]],
-  E: [[1,1,1,1,1],[1,1,0,0,0],[1,1,1,1,0],[1,1,0,0,0],[1,1,1,1,1]]
-};
+function preload() {}
 
 function create() {
-  const scene = this;
-  graphics = this.add.graphics();
+  g = this.add.graphics();
+  setupInput(this);
+  initMatch(this);
+}
 
-  // Build "PLATANUS HACK ARCADE" in cyan - centered and grid-aligned
-  // PLATANUS: 8 letters × (4 cols + 1 spacing) = 40 blocks, but last letter no spacing = 39 blocks × 15px = 585px
-  let x = Math.floor((800 - 585) / 2 / snakeSize) * snakeSize;
-  let y = Math.floor(180 / snakeSize) * snakeSize;
-  'PLATANUS'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0x00ffff);
-  });
-
-  // HACK: 4 letters × (4 cols + 1 spacing) = 20 blocks, but last letter no spacing = 19 blocks × 15px = 285px
-  x = Math.floor((800 - 285) / 2 / snakeSize) * snakeSize;
-  y = Math.floor(280 / snakeSize) * snakeSize;
-  'HACK'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0x00ffff);
-  });
-
-  // ARCADE: 6 letters × (5 cols + 1 spacing) = 36 blocks, but last letter no spacing = 35 blocks × 15px = 525px
-  x = Math.floor((800 - 525) / 2 / snakeSize) * snakeSize;
-  y = Math.floor(380 / snakeSize) * snakeSize;
-  'ARCADE'.split('').forEach(char => {
-    x = drawLetter(char, x, y, 0xff00ff, true);
-  });
-
-  // Score display
-  scoreText = this.add.text(16, 16, 'Score: 0', {
-    fontSize: '24px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#00ff00'
-  });
-
-  // Instructions
-  this.add.text(400, 560, 'Arrow Keys | Avoid Walls, Yourself & The Title!', {
-    fontSize: '16px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#888888',
-    align: 'center'
-  }).setOrigin(0.5);
-
-  // Initialize snake (start top left)
-  snake = [
-    { x: 75, y: 60 },
-    { x: 60, y: 60 },
-    { x: 45, y: 60 }
+function initMatch(scene) {
+  elapsed = 0;
+  running = true;
+  players = [
+    makePlayer(1, 240, 300, 0x3cff64),
+    makePlayer(2, 200, 340, 0x4ecbff)
   ];
+  items = [];
+  missiles = [];
+  obstacles = [];
 
-  // Spawn initial food
-  spawnFood();
+  timeText = scene.add.text(400, 20, '60', styleText('#ffffff', 26)).setOrigin(0.5, 0);
+  p1LivesText = scene.add.text(16, 16, '', styleText('#3cff64', 18));
+  p2LivesText = scene.add.text(800 - 16, 16, '', styleText('#4ecbff', 18)).setOrigin(1, 0);
+  p1ItemText = scene.add.text(16, 42, '', styleText('#aaaaaa', 14));
+  p2ItemText = scene.add.text(800 - 16, 42, '', styleText('#aaaaaa', 14)).setOrigin(1, 0);
+  endText = null;
+}
 
-  // Keyboard input
-  this.input.keyboard.on('keydown', (event) => {
-    if (gameOver && event.key === 'r') {
-      restartGame(scene);
-      return;
-    }
+function styleText(color, size) {
+  return { fontSize: size + 'px', fontFamily: 'Arial, sans-serif', color };
+}
 
-    if (event.key === 'ArrowUp' && direction.y === 0) {
-      nextDirection = { x: 0, y: -1 };
-    } else if (event.key === 'ArrowDown' && direction.y === 0) {
-      nextDirection = { x: 0, y: 1 };
-    } else if (event.key === 'ArrowLeft' && direction.x === 0) {
-      nextDirection = { x: -1, y: 0 };
-    } else if (event.key === 'ArrowRight' && direction.x === 0) {
-      nextDirection = { x: 1, y: 0 };
-    }
+function makePlayer(id, x, y, color) {
+  return { id, x, y, w: 26, h: 16, vx: 0, vy: 0, lives: LIFE_START, item: null, fireCd: 0, inv: 0, color };
+}
+
+function setupInput(scene) {
+  keys = scene.input.keyboard.addKeys({
+    w: 'W', a: 'A', s: 'S', d: 'D', e: 'E',
+    up: 'UP', left: 'LEFT', down: 'DOWN', right: 'RIGHT', enter: 'ENTER', t: 'T'
+  });
+}
+
+function update(_t, dt) {
+  // Toggle menu
+  if (Phaser.Input.Keyboard.JustDown(keys.t)) {
+    if (!menu) openMenu(this); else closeMenu(this);
+  }
+  if (!running || menu) { if (menu) drawMenu(); return; }
+  const dts = Math.min(50, dt);
+  elapsed += dts / 1000;
+  const sp = scrollSpeed(elapsed);
+
+  spawnLogic(elapsed);
+
+  players.forEach(p => tickPlayer(p, dts, sp));
+  missiles.forEach(m => { m.x += m.dx * m.sp * dts; m.y += m.dy * m.sp * dts; });
+  obstacles.forEach(o => { o.x -= sp * dts; });
+  items.forEach(i => { i.x -= sp * dts; });
+
+  handleCollisions();
+  cleanupOffscreen();
+  render();
+  updateUI();
+
+  checkWinCondition(this);
+}
+
+function scrollSpeed(t) {
+  if (t < 20) return SPD_SLOW;
+  if (t < 40) return SPD_MED;
+  return SPD_FAST;
+}
+
+function spawnLogic(t) {
+  if ((Math.random() < RATE_OBS)) spawnObstacle();
+  if (Math.random() < RATE_SPIKE) spawnSpike();
+  if (Math.random() < RATE_ITEM) spawnItemBox();
+}
+
+function spawnObstacle() {
+  const y = 120 + Math.random() * 360;
+  const destructible = Math.random() < 0.5;
+  const w = 24 + Math.floor(Math.random() * 3) * 16;
+  const h = 24 + Math.floor(Math.random() * 3) * 16;
+  obstacles.push({ type: destructible ? 'wall' : 'rock', x: 840, y, w, h, hp: destructible ? 2 : 999 });
+}
+
+function spawnSpike() {
+  const y = 520;
+  obstacles.push({ type: 'spike', x: 840, y, w: 20, h: 60, hp: 999 });
+}
+
+function spawnItemBox() {
+  const y = 120 + Math.random() * 360;
+  const kind = Math.random();
+  let reward = 'life';
+  if (kind < 0.33) reward = 'front'; else if (kind < 0.66) reward = 'back'; else reward = 'sides';
+  items.push({ x: 840, y, w: 20, h: 20, reward });
+}
+
+function tickPlayer(p, dt, sp) {
+  const ax = (p.id === 1) ? (keys.a.isDown ? -0.35 : keys.d.isDown ? 0.35 : 0) : (keys.left.isDown ? -0.35 : keys.right.isDown ? 0.35 : 0);
+  const ay = (p.id === 1) ? (keys.w.isDown ? -0.35 : keys.s.isDown ? 0.35 : 0) : (keys.up.isDown ? -0.35 : keys.down.isDown ? 0.35 : 0);
+  p.vx += ax * MOVE_SPEED * dt; p.vy += ay * MOVE_SPEED * dt;
+  p.vx *= 0.9; p.vy *= 0.9;
+  p.x += p.vx * dt + sp * dt * 40 * 0.02; // tiny forward drift
+  p.y += p.vy * dt;
+  p.x = Math.max(40, Math.min(760, p.x));
+  p.y = Math.max(60, Math.min(540, p.y));
+  if (p.fireCd > 0) p.fireCd -= dt;
+  if (p.inv > 0) p.inv -= dt;
+
+  const firePressed = (p.id === 1) ? Phaser.Input.Keyboard.JustDown(keys.e) : Phaser.Input.Keyboard.JustDown(keys.enter);
+  if (firePressed) useItem(p);
+}
+
+function useItem(p) {
+  if (!p.item || p.fireCd > 0) return;
+  if (p.item === 'life') { p.lives = Math.min(9, p.lives + 1); p.item = null; tone(660, 0.08); return; }
+  const shots = [];
+  if (p.item === 'front') shots.push({ dx: 1, dy: 0 });
+  if (p.item === 'back') shots.push({ dx: -1, dy: 0 });
+  if (p.item === 'sides') { shots.push({ dx: 1, dy: 0 }, { dx: -1, dy: 0 }); }
+  shots.forEach(v => missiles.push(makeMissile(p, v.dx, v.dy)));
+  p.item = null; p.fireCd = 300; tone(520, 0.06);
+}
+
+function makeMissile(p, dx, dy) {
+  return { owner: p.id, x: p.x + dx * 20, y: p.y + dy * 20, dx, dy, sp: 0.6, r: 6 };
+}
+
+function handleCollisions() {
+  // players with items
+  players.forEach(p => {
+    items.forEach(it => {
+      if (rectsOverlap(p, it)) { if (!p.item) p.item = it.reward; it.dead = true; tone(800, 0.05); }
+    });
   });
 
-  playTone(this, 440, 0.1);
+  // players with obstacles
+  players.forEach(p => {
+    obstacles.forEach(o => {
+      if (rectsOverlap(p, o)) {
+        if (o.type === 'wall' || o.type === 'rock') { damage(p, 1); bounceFrom(p, o); }
+        if (o.type === 'spike') { damage(p, 1); }
+      }
+    });
+  });
+
+  // missiles with obstacles and players
+  missiles.forEach(m => {
+    // hit obstacles
+    obstacles.forEach(o => {
+      if (!o.dead && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, o)) {
+        o.hp -= 1; if (o.hp <= 0 && o.type === 'wall') o.dead = true; m.dead = true; tone(180, 0.06);
+      }
+    });
+    // hit players (enemy only)
+    players.forEach(p => {
+      if (p.id !== m.owner && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, p)) {
+        damage(p, 1); m.dead = true; tone(200, 0.06);
+      }
+    });
+  });
 }
 
-function drawLetter(char, startX, startY, color, useBold = false) {
-  const pattern = useBold ? boldLetters[char] : letters[char];
-  if (!pattern) return startX + 30;
+function damage(p, amt) {
+  if (p.inv > 0) return;
+  p.lives -= amt; p.inv = 600;
+}
 
-  for (let row = 0; row < pattern.length; row++) {
-    for (let col = 0; col < pattern[row].length; col++) {
-      if (pattern[row][col]) {
-        const blockX = startX + col * snakeSize;
-        const blockY = startY + row * snakeSize;
-        titleBlocks.push({ x: blockX, y: blockY, color: color });
-      }
+function bounceFrom(p, o) {
+  if (p.x < o.x) p.x -= 12; else p.x += 12;
+  if (p.y < o.y) p.y -= 8; else p.y += 8;
+}
+
+function cleanupOffscreen() {
+  const offL = a => a.filter(x => !x.dead && x.x + (x.w || x.r || 0) > -40 && x.y > -80 && x.y < 680);
+  missiles = missiles.filter(m => !m.dead && m.x > -20 && m.x < 820 && m.y > -20 && m.y < 620);
+  obstacles = offL(obstacles);
+  items = offL(items);
+}
+
+function rectsOverlap(a, b) {
+  return a.x - a.w / 2 < b.x + b.w / 2 && a.x + a.w / 2 > b.x - b.w / 2 && a.y - a.h / 2 < b.y + b.h / 2 && a.y + a.h / 2 > b.y - b.h / 2;
+}
+
+function render() {
+  g.clear();
+  drawBackground();
+  // items
+  items.forEach(it => { g.fillStyle(0xffe066, 1); rectCentered(it.x, it.y, it.w, it.h); g.lineStyle(2, 0x8a6d1f, 1); g.strokeRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h); });
+  // obstacles
+  obstacles.forEach(o => {
+    if (o.type === 'wall') { g.fillStyle(0xff6b6b, 1); }
+    if (o.type === 'rock') { g.fillStyle(0x666e7a, 1); }
+    if (o.type === 'spike') { g.fillStyle(0xbfbfbf, 1); }
+    rectCentered(o.x, o.y, o.w, o.h);
+  });
+  // missiles
+  missiles.forEach(m => { g.fillStyle(0xffff66, 1); g.fillCircle(m.x, m.y, m.r); });
+  // players
+  players.forEach(p => {
+    const alpha = p.inv > 0 ? 0.4 + 0.6 * Math.sin(p.inv / 40) : 1;
+    g.fillStyle(p.color, alpha);
+    rectCentered(p.x, p.y, p.w, p.h);
+  });
+}
+
+function drawBackground() {
+  g.fillStyle(0x0b0f1a, 1); g.fillRect(0, 0, 800, 600);
+  g.fillStyle(0x0f1323, 1); g.fillRect(0, 560, 800, 40);
+  // parallax bands
+  const t = elapsed * 40;
+  g.lineStyle(2, 0x162042, 1);
+  for (let i = 0; i < 6; i++) {
+    const y = 120 + i * 70;
+    const x = (800 - ((t * (0.4 + i * 0.1)) % 200));
+    for (let k = 0; k < 6; k++) {
+      g.strokeRect(x - k * 200, y, 120, 8);
     }
   }
-  return startX + (pattern[0].length + 1) * snakeSize;
 }
 
-function update(_time, delta) {
-  if (gameOver) return;
-
-  moveTimer += delta;
-  if (moveTimer >= moveDelay) {
-    moveTimer = 0;
-    direction = nextDirection;
-    moveSnake(this);
-  }
-
-  drawGame();
+function rectCentered(x, y, w, h) {
+  g.fillRect(x - w / 2, y - h / 2, w, h);
 }
 
-function moveSnake(scene) {
-  const head = snake[0];
-  const newHead = {
-    x: head.x + direction.x * snakeSize,
-    y: head.y + direction.y * snakeSize
+function updateUI() {
+  const remain = Math.max(0, Math.ceil(MATCH_TIME - elapsed));
+  timeText.setText(remain.toString());
+  p1LivesText.setText('P1 ❤ ' + players[0].lives);
+  p2LivesText.setText('P2 ❤ ' + players[1].lives);
+  p1ItemText.setText('Item: ' + (players[0].item || '-'));
+  p2ItemText.setText('Item: ' + (players[1].item || '-'));
+}
+
+function checkWinCondition(scene) {
+  const p1Alive = players[0].lives > 0;
+  const p2Alive = players[1].lives > 0;
+  const timeUp = elapsed >= MATCH_TIME;
+  let winner = null;
+  if (!p1Alive && p2Alive) winner = 'Player 2 Wins!';
+  else if (!p2Alive && p1Alive) winner = 'Player 1 Wins!';
+  else if (!p1Alive && !p2Alive) winner = 'Draw!';
+  else if (timeUp) winner = players[0].x > players[1].x ? 'Player 1 Wins!' : (players[0].x < players[1].x ? 'Player 2 Wins!' : 'Draw!');
+  if (winner) endMatch(scene, winner);
+}
+
+function endMatch(scene, msg) {
+  running = false;
+  tone(240, 0.25);
+  const ov = scene.add.graphics();
+  ov.fillStyle(0x000000, 0.6); ov.fillRect(0, 0, 800, 600);
+  endText = scene.add.text(400, 260, msg, { fontSize: '44px', fontFamily: 'Arial, sans-serif', color: '#ffffff', stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5);
+  const sub = scene.add.text(400, 330, 'Press R to Rematch', styleText('#ffff66', 22)).setOrigin(0.5);
+  scene.input.keyboard.once('keydown-R', () => { scene.scene.restart(); });
+}
+
+function tone(f, d) {
+  const ctx = game.sound.context; const osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.connect(g); g.connect(ctx.destination); osc.type = 'square'; osc.frequency.value = f;
+  const t = ctx.currentTime; g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.01, t + d);
+  osc.start(t); osc.stop(t + d);
+}
+
+// Pause/config menu
+function openMenu(scene) {
+  menu = {
+    overlay: scene.add.graphics(),
+    title: scene.add.text(400, 120, 'Config', { fontSize: '36px', fontFamily: 'Arial, sans-serif', color: '#ffffff' }).setOrigin(0.5),
+    items: [
+      { name: 'Match Time', get: () => MATCH_TIME, set: v => { MATCH_TIME = clampInt(v, 10, 300); } },
+      { name: 'Start Lives', get: () => LIFE_START, set: v => { LIFE_START = clampInt(v, 1, 9); } },
+      { name: 'Obstacle Rate', get: () => RATE_OBS, set: v => { RATE_OBS = clamp(v, 0, 0.1); } },
+      { name: 'Spike Rate', get: () => RATE_SPIKE, set: v => { RATE_SPIKE = clamp(v, 0, 0.05); } },
+      { name: 'Item Rate', get: () => RATE_ITEM, set: v => { RATE_ITEM = clamp(v, 0, 0.05); } },
+      { name: 'Speed Slow', get: () => SPD_SLOW, set: v => { SPD_SLOW = clamp(v, 0.02, 1); } },
+      { name: 'Speed Med', get: () => SPD_MED, set: v => { SPD_MED = clamp(v, 0.02, 1.5); } },
+      { name: 'Speed Fast', get: () => SPD_FAST, set: v => { SPD_FAST = clamp(v, 0.02, 2); } },
+      { name: 'Move Speed', get: () => MOVE_SPEED, set: v => { MOVE_SPEED = clamp(v, 0.1, 3); } },
+    ],
+    idx: 0,
+    rows: [],
+    tip: scene.add.text(400, 480, 'Up/Down select • Left/Right change • T to resume', styleText('#ffff66', 16)).setOrigin(0.5)
   };
-
-  // Check wall collision
-  if (newHead.x < 0 || newHead.x >= 800 || newHead.y < 0 || newHead.y >= 600) {
-    endGame(scene);
-    return;
+  menu.overlay.fillStyle(0x000000, 0.7); menu.overlay.fillRect(0, 0, 800, 600);
+  for (let i = 0; i < menu.items.length; i++) {
+    const y = 180 + i * 34;
+    const txt = scene.add.text(400, y, '', styleText('#ffffff', 20)).setOrigin(0.5);
+    menu.rows.push(txt);
   }
+  running = false;
+  drawMenu();
+}
 
-  // Check self collision
-  for (let segment of snake) {
-    if (segment.x === newHead.x && segment.y === newHead.y) {
-      endGame(scene);
-      return;
-    }
+function drawMenu() {
+  for (let i = 0; i < menu.items.length; i++) {
+    const it = menu.items[i];
+    const sel = (i === menu.idx);
+    const name = it.name;
+    const val = it.get();
+    const color = sel ? '#00e5ff' : '#ffffff';
+    menu.rows[i].setColor(color).setText(name + ': ' + formatVal(val));
   }
-
-  // Check title block collision
-  for (let block of titleBlocks) {
-    if (newHead.x === block.x && newHead.y === block.y) {
-      endGame(scene);
-      return;
-    }
-  }
-
-  snake.unshift(newHead);
-
-  // Check food collision
-  if (newHead.x === food.x && newHead.y === food.y) {
-    score += 10;
-    scoreText.setText('Score: ' + score);
-    spawnFood();
-    playTone(scene, 880, 0.1);
-
-    if (moveDelay > 80) {
-      moveDelay -= 2;
-    }
-  } else {
-    snake.pop();
-  }
+  handleMenuInput();
 }
 
-function spawnFood() {
-  let valid = false;
-  let attempts = 0;
-
-  while (!valid && attempts < 100) {
-    attempts++;
-    const gridX = Math.floor(Math.random() * 53) * snakeSize;
-    const gridY = Math.floor(Math.random() * 40) * snakeSize;
-
-    // Check not on snake
-    let onSnake = false;
-    for (let segment of snake) {
-      if (segment.x === gridX && segment.y === gridY) {
-        onSnake = true;
-        break;
-      }
-    }
-
-    // Check not on title blocks
-    let onTitle = false;
-    for (let block of titleBlocks) {
-      if (gridX === block.x && gridY === block.y) {
-        onTitle = true;
-        break;
-      }
-    }
-
-    if (!onSnake && !onTitle) {
-      food = { x: gridX, y: gridY };
-      valid = true;
-    }
-  }
+function handleMenuInput() {
+  if (Phaser.Input.Keyboard.JustDown(keys.up)) menu.idx = (menu.idx + menu.items.length - 1) % menu.items.length;
+  if (Phaser.Input.Keyboard.JustDown(keys.down)) menu.idx = (menu.idx + 1) % menu.items.length;
+  const step = menu.idx <= 1 ? 1 : (menu.idx <= 4 ? 0.001 : 0.01);
+  if (Phaser.Input.Keyboard.JustDown(keys.left)) menu.items[menu.idx].set(menu.items[menu.idx].get() - step);
+  if (Phaser.Input.Keyboard.JustDown(keys.right)) menu.items[menu.idx].set(menu.items[menu.idx].get() + step);
 }
 
-function drawGame() {
-  graphics.clear();
-
-  // Draw title blocks
-  titleBlocks.forEach(block => {
-    graphics.fillStyle(block.color, 1);
-    graphics.fillRect(block.x, block.y, snakeSize - 2, snakeSize - 2);
-  });
-
-  // Draw snake
-  snake.forEach((segment, index) => {
-    if (index === 0) {
-      graphics.fillStyle(0x00ff00, 1);
-    } else {
-      graphics.fillStyle(0x00aa00, 1);
-    }
-    graphics.fillRect(segment.x, segment.y, snakeSize - 2, snakeSize - 2);
-  });
-
-  // Draw food
-  graphics.fillStyle(0xff0000, 1);
-  graphics.fillRect(food.x, food.y, snakeSize - 2, snakeSize - 2);
+function closeMenu(scene) {
+  if (!menu) return;
+  menu.overlay.destroy();
+  menu.title.destroy();
+  menu.tip.destroy();
+  menu.rows.forEach(r => r.destroy());
+  menu = null;
+  if (!endText) running = true;
 }
 
-function endGame(scene) {
-  gameOver = true;
-  playTone(scene, 220, 0.5);
-
-  // Semi-transparent overlay
-  const overlay = scene.add.graphics();
-  overlay.fillStyle(0x000000, 0.7);
-  overlay.fillRect(0, 0, 800, 600);
-
-  // Game Over title with glow effect
-  const gameOverText = scene.add.text(400, 300, 'GAME OVER', {
-    fontSize: '64px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#ff0000',
-    align: 'center',
-    stroke: '#ff6666',
-    strokeThickness: 8
-  }).setOrigin(0.5);
-
-  // Pulsing animation for game over text
-  scene.tweens.add({
-    targets: gameOverText,
-    scale: { from: 1, to: 1.1 },
-    alpha: { from: 1, to: 0.8 },
-    duration: 800,
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
-
-  // Score display
-  scene.add.text(400, 400, 'SCORE: ' + score, {
-    fontSize: '36px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#00ffff',
-    align: 'center',
-    stroke: '#000000',
-    strokeThickness: 4
-  }).setOrigin(0.5);
-
-  // Restart instruction with subtle animation
-  const restartText = scene.add.text(400, 480, 'Press R to Restart', {
-    fontSize: '24px',
-    fontFamily: 'Arial, sans-serif',
-    color: '#ffff00',
-    align: 'center',
-    stroke: '#000000',
-    strokeThickness: 3
-  }).setOrigin(0.5);
-
-  // Blinking animation for restart text
-  scene.tweens.add({
-    targets: restartText,
-    alpha: { from: 1, to: 0.3 },
-    duration: 600,
-    yoyo: true,
-    repeat: -1,
-    ease: 'Sine.easeInOut'
-  });
-}
-
-function restartGame(scene) {
-  snake = [
-    { x: 75, y: 60 },
-    { x: 60, y: 60 },
-    { x: 45, y: 60 }
-  ];
-  direction = { x: 1, y: 0 };
-  nextDirection = { x: 1, y: 0 };
-  score = 0;
-  gameOver = false;
-  moveDelay = 150;
-  scoreText.setText('Score: 0');
-  spawnFood();
-  scene.scene.restart();
-}
-
-function playTone(scene, frequency, duration) {
-  const audioContext = scene.sound.context;
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  oscillator.frequency.value = frequency;
-  oscillator.type = 'square';
-
-  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + duration);
-}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function clampInt(v, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(v))); }
+function formatVal(v) { return (typeof v === 'number' && Math.abs(v - Math.round(v)) > 0.0001) ? v.toFixed(3) : String(v); }

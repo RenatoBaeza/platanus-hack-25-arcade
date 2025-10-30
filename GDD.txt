@@ -1,0 +1,67 @@
+GAME DESIGN DOCUMENT
+Title: "TurboTurbo"
+
+1. High Concept
+A 2D side-scroller, battle-racing arcade game for 2 players, where the screen constantly scrolls to the right.
+Players use quick reflexes and item attacks to survive hazards and outlast or outpace their rival.
+You don’t race by moving forward — the world scrolls. The goal: stay alive and stay ahead.
+
+2. Core Gameplay Loop
+- Players spawn on screen with 3 lives each which is shown in the UI.
+- The world begins scrolling right — terrain, walls, and obstacles come toward them.
+- Players must evade obstacles and collect item boxes.
+- Item boxes give weapons or life bonuses.
+- Use weapons to eliminate the opponent or push them into hazards.
+- After 60 seconds (shown in the UI), the race ends — the player farthest to the right wins.
+
+3. Objective
+- Primary Win Condition: Be alive when your opponent dies.
+- Secondary Win Condition: When the 60s timer runs out, be further to the right (ahead).
+
+4. Controls (Arcade-Style)
+Player 1 uses WASD and E for activating an item
+Player 2 uses the arrow keys and Enter for activating an item
+
+5. Player Mechanics
+- Lives: 3 starting lives.
+- Can gain extra lives through item boxes that randomly spawn as the terrain moves in front of players. Hitting your car to a life box immediately applies one life.
+- Can obtain weapons by hitting a weapon box, which can be used with the action button. Only one weapon can be stored at a time.
+- Position: The player’s character stays roughly centered horizontally; only slight forward/backward offset allowed for head-to-head pushing.
+- Death: Losing all lives removes you from the match.
+
+6. Item boxes
+Randomly spawn along the track; player touches to open. Each box looks different.
+Possible rewards:
+- Extra Life: +1 life, instant effect
+- Front Missile: Shoots forward; explodes on hit with the rival player, with a wall or if out of screen
+- Back Missile: Shoots behind; explodes on hit with the rival player, with a wall or if out of screen
+- Sides Missile: Shoots to both sides of the player; explodes on hit with the rival player, with a wall or if out of screen
+
+7. Environment & Obstacles
+Scrolling Terrain: Background moves continuously to the right at increasing speed.
+
+Obstacles:
+- Destructible walls (breakable with missiles)
+- Indestructible terrain (must dodge)
+- Spikes or electric traps (deal 1 life damage on touch)
+
+Scrolling Speed Curve:
+- 0–20s: Slow (intro pace)
+- 20–40s: Medium (more hazards)
+- 40–60s: Fast (chaotic, high tension)
+
+8. Visual Style
+Camera: Fixed side-scrolling with parallax background layers (skyline, terrain, obstacles).
+
+UI Elements:
+- Timer countdown (60s)
+- Player 1 & 2 life indicators (hearts)
+- Current item icon for each Player
+
+9. Audio
+- Music: Energetic synthwave or chiptune loop.
+- SFX: Missile launch/explosion, Item pickup, Damage / death, Countdown buzzer at 10s remaining
+
+End of Match:
+- Winner shown (“Player 1 Wins!” or “Player 2 Wins!”)
+- Option to rematch or return to title screen
