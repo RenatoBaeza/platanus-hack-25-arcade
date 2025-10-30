@@ -26,7 +26,7 @@ let music = { on: false, timer: null, step: 0, gain: null, o1: null, o2: null };
 
 // Tunable parameters (editable in pause menu)
 let MATCH_TIME = 60;
-let LIFE_START = 9;
+let LIFE_START = 999;
 let RATE_OBS = 0.02;
 let RATE_SPIKE = 0.008;
 let RATE_ITEM = 0.004;
@@ -36,9 +36,11 @@ let SPD_SLOW = 0.12;
 let SPD_MED = 0.18;
 let SPD_FAST = 0.26;
 let MOVE_SPEED = 0.02;
-// damage tuning
 let WALL_HIT_DAMAGE = 1;      // base damage when a player hits a wall
 let SHOT_DAMAGE_MULT = 2;     // missiles do N× wall-hit damage to players
+// Missile speeds (configurable)
+let FRONT_MISSILE_SPEED = 0.42;   // from right side ("front")
+let TOPDOWN_MISSILE_SPEED = 0.22; // from top
 
 function preload() {}
 
@@ -76,6 +78,21 @@ function initMatch(scene) {
 
 function styleText(color, size) {
   return { fontSize: size + 'px', fontFamily: 'Arial, sans-serif', color };
+}
+
+function pickupName(kind) {
+  if (kind === 'life') return 'Life';
+  if (kind === 'front') return 'Front';
+  if (kind === 'back') return 'Back';
+  if (kind === 'sides') return 'Sides';
+  if (kind === 'vert') return 'Vert';
+  return 'Item';
+}
+
+function popupText(x, y, msg, color) {
+  if (!sceneRef) return;
+  const t = sceneRef.add.text(x, y - 18, msg, { fontSize: '18px', fontFamily: 'Arial, sans-serif', color: color || '#ffffff', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5);
+  sceneRef.tweens.add({ targets: t, y: y - 46, alpha: 0, duration: 900, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
 }
 
 function makePlayer(id, x, y, color) {
@@ -246,7 +263,7 @@ function spawnEnemyMissile() {
   if (Math.abs(players[1].y - y) < Math.abs(players[0].y - y)) target = players[1];
   const vx = -1;
   const dy = Phaser.Math.Clamp((target.y - y) / 220, -0.6, 0.6);
-  missiles.push({ owner: 0, x, y, dx: vx, dy, sp: 0.56, r: 6 });
+  missiles.push({ owner: 0, x, y, dx: vx, dy, sp: FRONT_MISSILE_SPEED, r: 6 });
 }
 
 function spawnTopMissile() {
@@ -256,14 +273,14 @@ function spawnTopMissile() {
   let target = Math.abs(players[0].x - x) < Math.abs(players[1].x - x) ? players[0] : players[1];
   const vy = 1;
   const dx = Phaser.Math.Clamp((target.x - x) / 260, -0.6, 0.6);
-  missiles.push({ owner: 0, x, y, dx, dy: vy, sp: 0.58, r: 6 });
+  missiles.push({ owner: 0, x, y, dx, dy: vy, sp: TOPDOWN_MISSILE_SPEED, r: 6 });
 }
 
 function handleCollisions() {
   // players with items
   players.forEach(p => {
     items.forEach(it => {
-      if (rectsOverlap(p, it)) { if (!p.item) p.item = it.reward; it.dead = true; tone(800, 0.05); burst(it.x, it.y, 0xffe066, 10); }
+      if (rectsOverlap(p, it)) { if (!p.item) { p.item = it.reward; popupText(it.x, it.y, pickupName(it.reward) + ' collected!'); } it.dead = true; tone(800, 0.05); burst(it.x, it.y, 0xffe066, 10); }
     });
   });
 
@@ -298,6 +315,7 @@ function handleCollisions() {
 function damage(p, amt) {
   if (p.inv > 0) return;
   p.lives -= amt; p.inv = 600;
+  popupText(p.x, p.y, '-' + amt, '#ff4444');
   burst(p.x, p.y, 0xff2d55, 14);
   if (sceneRef) sceneRef.cameras.main.shake(100, 0.0025);
 }
@@ -412,6 +430,36 @@ function drawHUD() {
   // Right panel
   g.fillStyle(0x000000, 0.28); g.fillRoundedRect(800 - 210, 10, 200, 54, 10);
   g.lineStyle(2, 0x24a4ff, 0.6); g.strokeRoundedRect(800 - 210, 10, 200, 54, 10);
+
+  // Player health bars (high-visibility)
+  const drawBar = (x, y, w, h, pct, edge, colA, colB) => {
+    const p = Phaser.Math.Clamp(pct, 0, 1);
+    // glow
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(colA, 0.22); g.fillRoundedRect(x - 3, y - 3, w + 6, h + 6, 8);
+    g.setBlendMode(Phaser.BlendModes.NORMAL);
+    // background
+    g.fillStyle(0x0b0f1a, 0.85); g.fillRoundedRect(x, y, w, h, 6);
+    // fill (simple gradient steps for punch)
+    const steps = 8; const fw = Math.max(0, Math.floor(w * p));
+    for (let i = 0; i < steps; i++) {
+      const t = steps <= 1 ? 0 : i / (steps - 1);
+      const c = lerpColor(colA, colB, t);
+      const sx = x + (fw) * (i / steps);
+      const sw = Math.ceil(fw / steps);
+      if (sw > 0) { g.fillStyle(c, 0.95); g.fillRect(sx, y, sw, h); }
+    }
+    // outline and ticks
+    g.lineStyle(2, edge, 0.9); g.strokeRoundedRect(x, y, w, h, 6);
+    g.lineStyle(1, 0xffffff, 0.15);
+    for (let i = 1; i < 10; i++) { const tx = x + (w * i / 10); g.lineBetween(tx, y + 2, tx, y + h - 2); }
+  };
+  const p1Pct = players.length ? players[0].lives / LIFE_START : 0;
+  const p2Pct = players.length > 1 ? players[1].lives / LIFE_START : 0;
+  // P1 bar (left panel)
+  drawBar(16, 58, 180, 14, p1Pct, 0x2dd36f, 0x39ffb6, 0x00d4ff);
+  // P2 bar (right panel)
+  drawBar(800 - 16 - 180, 58, 180, 14, p2Pct, 0x24a4ff, 0x4ecbff, 0x39ffb6);
 
   // Music indicator (top-right)
   if (music.on) {
@@ -539,8 +587,8 @@ function burst(x, y, color, n) {
 function updateUI() {
   const remain = Math.max(0, Math.ceil(MATCH_TIME - elapsed));
   timeText.setText(remain.toString());
-  p1LivesText.setText('P1 ❤ ' + players[0].lives);
-  p2LivesText.setText('P2 ❤ ' + players[1].lives);
+  p1LivesText.setText('P1 ❤ ' + Math.max(0, Math.floor(players[0].lives)));
+  p2LivesText.setText('P2 ❤ ' + Math.max(0, Math.floor(players[1].lives)));
   p1ItemText.setText('Item: ' + (players[0].item || '-'));
   p2ItemText.setText('Item: ' + (players[1].item || '-'));
 }
@@ -716,6 +764,8 @@ function openMenu(scene) {
       { name: 'Spike Rate', get: () => RATE_SPIKE, set: v => { RATE_SPIKE = clamp(v, 0, 0.05); } },
       { name: 'Item Rate', get: () => RATE_ITEM, set: v => { RATE_ITEM = clamp(v, 0, 0.05); } },
       { name: 'Enemy Missiles', get: () => RATE_EMISS, set: v => { RATE_EMISS = clamp(v, 0, 0.05); } },
+      { name: 'Front Miss Spd', get: () => FRONT_MISSILE_SPEED, set: v => { FRONT_MISSILE_SPEED = clamp(v, 0.05, 2); } },
+      { name: 'Topdown Miss Spd', get: () => TOPDOWN_MISSILE_SPEED, set: v => { TOPDOWN_MISSILE_SPEED = clamp(v, 0.05, 2); } },
       { name: 'Speed Slow', get: () => SPD_SLOW, set: v => { SPD_SLOW = clamp(v, 0.02, 1); } },
       { name: 'Speed Med', get: () => SPD_MED, set: v => { SPD_MED = clamp(v, 0.02, 1.5); } },
       { name: 'Speed Fast', get: () => SPD_FAST, set: v => { SPD_FAST = clamp(v, 0.02, 2); } },
