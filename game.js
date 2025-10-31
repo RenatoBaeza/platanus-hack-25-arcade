@@ -21,6 +21,7 @@ let startMenu = null;
 let fx = [];
 let sceneRef = null;
 let music = { on: false, timer: null, step: 0, gain: null, o1: null, o2: null };
+let hypeOn = false;
 
 let MATCH_TIME = 60;
 let LIFE_START = 999;
@@ -50,7 +51,8 @@ function create() {
 
 function initMatch(scene) {
   elapsed = 0;
-  running = true;
+  running = false;
+  hypeOn = false;
   players = [
     makePlayer(1, 240, 300, 0x3cff64),
     makePlayer(2, 200, 340, 0x4ecbff)
@@ -60,6 +62,8 @@ function initMatch(scene) {
   obstacles = [];
 
   timeText = scene.add.text(400, 20, '60', styleText('#ffffff', 26)).setOrigin(0.5, 0).setDepth(1000);
+  timeText.setScale(1);
+  timeText.setColor('#ffffff');
   timeText.setShadow(2, 2, '#000000', 2, true, true);
   p1LivesText = scene.add.text(16, 16, '', styleText('#3cff64', 18)).setDepth(1000);
   p2LivesText = scene.add.text(800 - 16, 16, '', styleText('#4ecbff', 18)).setOrigin(1, 0).setDepth(1000);
@@ -70,10 +74,20 @@ function initMatch(scene) {
   p1ItemText.setShadow(1, 1, '#000000', 2, true, true);
   p2ItemText.setShadow(1, 1, '#000000', 2, true, true);
   endText = null;
+  showRoundStartMessage(scene);
 }
 
 function styleText(color, size) {
   return { fontSize: size + 'px', fontFamily: 'Arial, sans-serif', color };
+}
+
+function showRoundStartMessage(scene) {
+  const msg = scene.add.text(400, 280, 'KILL EACH OTHER AND SURVIVE!', { fontSize: '42px', fontFamily: 'Arial, sans-serif', color: '#ff4444', stroke: '#000000', strokeThickness: 6 }).setOrigin(0.5).setDepth(2000);
+  msg.setAlpha(0);
+  msg.setScale(0.5);
+  scene.tweens.add({ targets: msg, alpha: 1, scale: 1.1, duration: 400, ease: 'Cubic.easeOut' });
+  scene.tweens.add({ targets: msg, alpha: 1, scale: 1, duration: 200, delay: 400, ease: 'Sine.easeOut' });
+  scene.tweens.add({ targets: msg, alpha: 0, scale: 1.2, duration: 500, delay: 2000, ease: 'Cubic.easeIn', onComplete: () => { msg.destroy(); running = true; } });
 }
 
 function pickupName(kind) {
@@ -136,6 +150,21 @@ function update(_t, dt) {
   updateUI();
 
   checkWinCondition(this);
+  const remainForHype = Math.max(0, Math.ceil(MATCH_TIME - elapsed));
+  if (!hypeOn && remainForHype <= 20) {
+    hypeOn = true;
+    if (sceneRef) {
+      timeText.setFontSize(40);
+      timeText.setColor('#ffff66');
+      sceneRef.tweens.add({ targets: timeText, scale: 1.15, yoyo: true, repeat: -1, duration: 420, ease: 'Sine.easeInOut' });
+    }
+    if (music && music._inited) {
+      music.hype = true;
+      const t = music.ctx.currentTime;
+      if (music.lp) { music.lp.frequency.setTargetAtTime(2800, t, 0.2); }
+      if (music.gain && music.gain.gain) { music.gain.gain.setTargetAtTime(0.16, t, 0.3); }
+    }
+  }
 }
 
 function scrollSpeed(t) {
@@ -155,28 +184,35 @@ function spawnLogic(t) {
 
 function spawnObstacle() {
   const y = 120 + Math.random() * 360;
-  // 25% chance for a purple vertical-moving obstacle
   if (Math.random() < 0.25) {
     const size = 24 + Math.floor(Math.random() * 2) * 16;
-    const amp = 20 + Math.random() * 50; // vertical travel
-    const vph = 0.002 + Math.random() * 0.003; // speed of oscillation
-    obstacles.push({ type: 'jelly', x: 840, y, y0: y, ph: Math.random() * Math.PI * 2, amp, vph, w: size, h: size, hp: 2 });
+    const amp = 20 + Math.random() * 50;
+    const vph = 0.002 + Math.random() * 0.003;
+    const o = { type: 'jelly', x: 840, y, y0: y, ph: Math.random() * Math.PI * 2, amp, vph, w: size, h: size, hp: 2, pulse: 0 };
+    obstacles.push(o);
+    if (sceneRef) sceneRef.tweens.add({ targets: o, pulse: 1, duration: 700 + Math.random() * 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   } else {
     const destructible = Math.random() < 0.5;
     const w = 24 + Math.floor(Math.random() * 3) * 16;
     const h = 24 + Math.floor(Math.random() * 3) * 16;
-    obstacles.push({ type: destructible ? 'wall' : 'rock', x: 840, y, w, h, hp: destructible ? 2 : 999 });
+    const o = { type: destructible ? 'wall' : 'rock', x: 840, y, w, h, hp: destructible ? 2 : 999, pulse: 0 };
+    obstacles.push(o);
+    if (sceneRef) sceneRef.tweens.add({ targets: o, pulse: 1, duration: 600 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 }
 
 function spawnSpike() {
   const y = 520;
-  obstacles.push({ type: 'spike', x: 840, y, w: 20, h: 60, hp: 999 });
+  const o = { type: 'spike', x: 840, y, w: 20, h: 60, hp: 999, pulse: 0 };
+  obstacles.push(o);
+  if (sceneRef) sceneRef.tweens.add({ targets: o, pulse: 1, duration: 800 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 }
 
 function spawnTopSpike() {
   const y = 80;
-  obstacles.push({ type: 'spike', x: 840, y, w: 20, h: 60, hp: 999 });
+  const o = { type: 'spike', x: 840, y, w: 20, h: 60, hp: 999, pulse: 0 };
+  obstacles.push(o);
+  if (sceneRef) sceneRef.tweens.add({ targets: o, pulse: 1, duration: 800 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 }
 
 function canPlaceItemAt(x, y) {
@@ -199,7 +235,12 @@ function spawnItemBox() {
   else if (kind < 0.5) reward = 'back';
   else if (kind < 0.75) reward = 'sides';
   else reward = 'vert';
-  items.push({ x, y, w: 34, h: 34, reward });
+  const it = { x, y, w: 34, h: 34, reward, pulse: 0, glow: 0.5 };
+  items.push(it);
+  if (sceneRef) {
+    sceneRef.tweens.add({ targets: it, pulse: 1, duration: 900 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    sceneRef.tweens.add({ targets: it, glow: 1, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
 }
 
 function tickPlayer(p, dt, sp) {
@@ -298,14 +339,14 @@ function handleCollisions() {
   missiles.forEach(m => {
     // hit obstacles
     obstacles.forEach(o => {
-      if (!o.dead && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, o)) {
+      if (!o.dead && rectsOverlap({ x: m.x, y: m.y, w: m.r * 2, h: m.r * 2 }, o)) {
         o.hp -= 1; if (o.hp <= 0 && (o.type === 'wall' || o.type === 'jelly')) { o.dead = true; burst(o.x, o.y, 0xff6b6b, 10); }
         m.dead = true; tone(180, 0.06); burst(m.x, m.y, 0xffff66, 8);
       }
     });
     // hit players (enemy only)
     players.forEach(p => {
-      if (p.id !== m.owner && rectsOverlap({ x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 }, p)) {
+      if (p.id !== m.owner && rectsOverlap({ x: m.x, y: m.y, w: m.r * 2, h: m.r * 2 }, p)) {
         damage(p, WALL_HIT_DAMAGE * SHOT_DAMAGE_MULT); m.dead = true; tone(200, 0.06); burst(p.x, p.y, 0xff4444, 12);
       }
     });
@@ -349,8 +390,10 @@ function render() {
     if (o.type === 'rock') { g.fillStyle(0x666e7a, 1); }
     if (o.type === 'spike') { g.fillStyle(0xbfbfbf, 1); }
     if (o.type === 'jelly') { g.fillStyle(0xc77dff, 1); }
-    rectCentered(o.x, o.y, o.w, o.h);
-    g.lineStyle(2, 0x000000, 0.25); g.strokeRoundedRect(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h, 4);
+    const sc = 1 + ((o.pulse || 0) * (o.type === 'jelly' ? 0.08 : 0.05));
+    const ww = o.w * sc, hh = o.h * sc;
+    g.fillRoundedRect(o.x - ww / 2, o.y - hh / 2, ww, hh, 4);
+    g.lineStyle(2, 0x000000, 0.25); g.strokeRoundedRect(o.x - ww / 2, o.y - hh / 2, ww, hh, 4);
   });
   // missiles
   missiles.forEach(m => { g.setBlendMode(Phaser.BlendModes.ADD); g.fillStyle(0xffff66, 0.15); g.fillCircle(m.x, m.y, m.r * 2.4); g.fillStyle(0xffcc00, 0.25); g.fillCircle(m.x, m.y, m.r * 1.6); g.setBlendMode(Phaser.BlendModes.NORMAL); g.fillStyle(0xffff99, 1); g.fillCircle(m.x, m.y, m.r); });
@@ -483,24 +526,22 @@ function rectCentered(x, y, w, h) {
 }
 
 function drawItemBox(it) {
-  // color by reward type + icon inside representing shooting direction
   let base = 0xffe066, edge = 0x8a6d1f;
   if (it.reward === 'front') { base = 0xffc107; edge = 0x8b6b00; }
   else if (it.reward === 'back') { base = 0x4ecbff; edge = 0x1a6b87; }
   else if (it.reward === 'sides') { base = 0xc77dff; edge = 0x5b2a8a; }
   else if (it.reward === 'vert') { base = 0xff7ab2; edge = 0x8a2a57; }
-  // glow
+  const sc = 1 + (it.pulse || 0) * 0.08;
+  const ww = it.w * sc, hh = it.h * sc;
   g.setBlendMode(Phaser.BlendModes.ADD);
-  g.fillStyle(base, 0.25);
-  g.fillRoundedRect(it.x - it.w / 2 - 3, it.y - it.h / 2 - 3, it.w + 6, it.h + 6, 4);
+  g.fillStyle(base, 0.15 + (it.glow || 0) * 0.25);
+  g.fillRoundedRect(it.x - ww / 2 - 3, it.y - hh / 2 - 3, ww + 6, hh + 6, 4);
   g.setBlendMode(Phaser.BlendModes.NORMAL);
-  // box
   g.fillStyle(base, 1);
-  g.fillRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4);
+  g.fillRoundedRect(it.x - ww / 2, it.y - hh / 2, ww, hh, 4);
   g.lineStyle(2, edge, 1);
-  g.strokeRoundedRect(it.x - it.w / 2, it.y - it.h / 2, it.w, it.h, 4);
-  // icon
-  drawItemIcon(it.reward, it.x, it.y, it.w - 10, 0x0b0f1a, edge);
+  g.strokeRoundedRect(it.x - ww / 2, it.y - hh / 2, ww, hh, 4);
+  drawItemIcon(it.reward, it.x, it.y, ww - 10, 0x0b0f1a, edge);
 }
 
 function drawItemIcon(kind, cx, cy, size, color, shadow) {
@@ -679,14 +720,15 @@ function initMusic(scene) {
   const master = ctx.createGain(); master.gain.value = 0.1;
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.2;
   master.connect(lp); lp.connect(ctx.destination);
-  const v1g = ctx.createGain(); const v2g = ctx.createGain(); v1g.gain.value = 0; v2g.gain.value = 0;
-  v1g.connect(master); v2g.connect(master);
-  const o1 = ctx.createOscillator(); const o2 = ctx.createOscillator();
+  const v1g = ctx.createGain(); const v2g = ctx.createGain(); const v3g = ctx.createGain(); v1g.gain.value = 0; v2g.gain.value = 0; v3g.gain.value = 0;
+  v1g.connect(master); v2g.connect(master); v3g.connect(master);
+  const o1 = ctx.createOscillator(); const o2 = ctx.createOscillator(); const o3 = ctx.createOscillator();
   o1.type = 'square'; o2.type = 'sine';
-  o1.connect(v1g); o2.connect(v2g);
+  o3.type = 'sawtooth';
+  o1.connect(v1g); o2.connect(v2g); o3.connect(v3g);
   const t0 = ctx.currentTime;
-  o1.start(t0); o2.start(t0);
-  music.gain = master; music.o1 = o1; music.o2 = o2; music.v1g = v1g; music.v2g = v2g; music.step = 0;
+  o1.start(t0); o2.start(t0); o3.start(t0);
+  music.gain = master; music.lp = lp; music.o1 = o1; music.o2 = o2; music.o3 = o3; music.v1g = v1g; music.v2g = v2g; music.v3g = v3g; music.step = 0; music.hype = false;
   startMusic(scene);
 }
 
@@ -707,6 +749,7 @@ function stopMusic() {
   const t = music.ctx.currentTime;
   music.v1g.gain.setTargetAtTime(0, t, 0.03);
   music.v2g.gain.setTargetAtTime(0, t, 0.03);
+  if (music.v3g) music.v3g.gain.setTargetAtTime(0, t, 0.03);
 }
 
 function stepMusic(stepSec) {
@@ -751,6 +794,16 @@ function stepMusic(stepSec) {
     // gently decay lead when resting
     const a1 = music.v1g.gain; a1.cancelScheduledValues(t);
     a1.setTargetAtTime(0.006, t, 0.03);
+  }
+  if (music.hype && music.o3 && music.v3g) {
+    const arp = [0, 2, 5, 7];
+    const n = arp[step % arp.length];
+    const f3 = midiToFreq(root + 24 + n);
+    music.o3.frequency.setValueAtTime(f3, t);
+    const a3 = music.v3g.gain; a3.cancelScheduledValues(t);
+    a3.setValueAtTime(0.0001, t);
+    a3.exponentialRampToValueAtTime(0.05, t + 0.006);
+    a3.exponentialRampToValueAtTime(0.01, endT);
   }
   // Simple percussion: kick/snare/hat
   if (step % 8 === 0) hit('kick', t, stepSec); // beats 1 and 3
